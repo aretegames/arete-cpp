@@ -281,7 +281,7 @@ impl ParsedInfo {
         output += "extern \"C\" size_t component_size(const char* string_id) {\n";
 
         if self.structs.is_empty() {
-            output += "    std::abort()\n;"
+            output += "    std::abort();\n"
         } else {
             output += &format!(
                 "    if (std::strcmp(string_id, \"{}\") == 0) {{\n",
@@ -312,7 +312,7 @@ impl ParsedInfo {
         output += "extern \"C\" size_t component_align(const char* string_id) {\n";
 
         if self.structs.is_empty() {
-            output += "    std::abort()\n";
+            output += "    std::abort();\n";
         } else {
             output += &format!(
                 "    if (std::strcmp(string_id, \"{}\") == 0) {{\n",
@@ -343,7 +343,7 @@ impl ParsedInfo {
         output += "extern \"C\" ComponentType component_type(const char* string_id) {\n";
 
         if self.structs.is_empty() {
-            output += "    std::abort()\n";
+            output += "    std::abort();\n";
         } else {
             output += &format!(
                 "    if (std::strcmp(string_id, \"{}\") == 0) {{\n",
