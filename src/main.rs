@@ -16,12 +16,12 @@ struct Args {
 }
 
 const ARETE_PUBLIC_COMPONENTS: &[&str] = &[
-    "GpuTransform",
-    "GpuColor",
-    "GpuDirectionalLight",
-    "GpuDynamicStaticMesh",
-    "GpuGlobalLighting",
-    "GpuPointLight",
+    "Camera",
+    "Color",
+    "DirectionalLight",
+    "DynamicStaticMesh",
+    "PointLight",
+    "Transform",
 ];
 
 fn main() {
@@ -788,7 +788,7 @@ impl ParsedInfo {
                 .iter()
                 .any(|input| matches!(input.arg_type, ArgType::Query { .. }))
         }) {
-            
+
             output += &format!("        case {i}: switch (arg_index) {{\n");
 
             for (i, input) in system.inputs.iter().enumerate() {
