@@ -1,9 +1,8 @@
 use ::std::{env, fs};
-use std::{ffi::OsStr, path::Path};
+use std::path::Path;
 
 use arete_codegen_core::*;
 use clap::Parser;
-use convert_case::{Case, Casing};
 use regex::Regex;
 
 #[derive(Parser, Debug)]
@@ -15,15 +14,6 @@ struct Args {
     #[arg(short, long)]
     output: Option<String>,
 }
-
-const ARETE_PUBLIC_COMPONENTS: &[&str] = &[
-    "Camera",
-    "Color",
-    "DirectionalLight",
-    "DynamicStaticMesh",
-    "PointLight",
-    "Transform",
-];
 
 fn main() {
     let args = Args::parse();
@@ -104,104 +94,78 @@ fn filter_read_file(path: &Path) -> String {
     file
 }
 
-fn parse_system(info: &mut FfiGenerator, ident: &str, body: &str, is_once: bool) {
-    let re_params = Regex::new("\\s*(const)?\\s*([a-zA-Z0-9]+)\\s*&[\\s\\S]*?,?").unwrap();
-
+fn parse_system(info: &mut FfiGenerator, ident: &str, mut body: &str, is_once: bool) {
     let mut inputs = Vec::new();
 
-    for param in re_params.captures_iter(body) {
-        let ident = param.get(2).unwrap().as_str();
-        let mutable = param.get(1).is_none();
+    body = body.trim();
 
-        // let param_type = component.path.segments.last().unwrap().ident.to_string();
+    while !body.is_empty() {
+        let mutable;
+        if body.starts_with("const") {
+            mutable = false;
+            body = body[5..].trim_start();
+        } else {
+            mutable = true;
+        }
 
-        // let (ident, arg_type) = if param_type == "Query" {
-        //     let PathArguments::AngleBracketed(query_inputs) =
-        //         &component.path.segments.last().unwrap().arguments
-        //     else {
-        //         panic!("invalid query generics")
-        //     };
+        let ident_end = body
+            .find('&')
+            .expect("all parameters must be taken as references");
 
-        //     let inputs = query_inputs
-        //         .args
-        //         .iter()
-        //         .flat_map(|input| {
-        //             let GenericArgument::Type(input) = input else {
-        //                 panic!("invalid query generics")
-        //             };
+        if body.starts_with("Query") {
+            body = body[5..].trim_start();
+            assert!(body.starts_with('<'), "malformed query");
+            body = body[1..].trim_start();
 
-        //             if let Type::Reference(ty) = input {
-        //                 let Type::Path(component) = ty.elem.as_ref() else {
-        //                     panic!("unsupported query input type")
-        //                 };
+            let mut query_inputs = Vec::new();
 
-        //                 Vec::from([SystemInputInfo {
-        //                     ident: component.path.segments.last().unwrap().ident.to_string(),
-        //                     arg_type: ArgType::DataAccessDirect,
-        //                     mutable: ty.mutability.is_some(),
-        //                 }])
-        //             } else {
-        //                 let Type::Tuple(tuple) = input else {
-        //                     panic!("unsupported query input type")
-        //                 };
+            while !body.starts_with('&') {
+                let mutable;
+                if body.starts_with("const") {
+                    mutable = false;
+                    body = body[5..].trim_start();
+                } else {
+                    mutable = true;
+                }
 
-        //                 tuple
-        //                     .elems
-        //                     .iter()
-        //                     .map(|elem| {
-        //                         let Type::Reference(ty) = elem else {
-        //                             panic!("system inputs must be references")
-        //                         };
+                let ident_end = body
+                    .find(',')
+                    .or_else(|| body.find('>'))
+                    .expect("malformed query");
 
-        //                         let Type::Path(component) = ty.elem.as_ref() else {
-        //                             panic!("unsupported system input type")
-        //                         };
+                let ident = body[..ident_end].trim_end().to_owned();
 
-        //                         SystemInputInfo {
-        //                             ident: component
-        //                                 .path
-        //                                 .segments
-        //                                 .last()
-        //                                 .unwrap()
-        //                                 .ident
-        //                                 .to_string(),
-        //                             arg_type: ArgType::DataAccessDirect,
-        //                             mutable: ty.mutability.is_some(),
-        //                         }
-        //                     })
-        //                     .collect()
-        //             }
-        //         })
-        //         .collect();
+                query_inputs.push(SystemInputInfo {
+                    ident,
+                    arg_type: ArgType::DataAccessDirect,
+                    mutable,
+                });
 
-        //     (param_type, ArgType::Query { inputs })
-        // } else if param_type == "ComponentCell" {
-        //     let PathArguments::AngleBracketed(query_inputs) =
-        //         &component.path.segments.last().unwrap().arguments
-        //     else {
-        //         panic!("invalid query generics")
-        //     };
+                body = body[ident_end + 1..].trim_start();
+            }
 
-        //     let GenericArgument::Type(input) = query_inputs.args.first().unwrap() else {
-        //         panic!("invalid ComponentCell generic")
-        //     };
+            inputs.push(SystemInputInfo {
+                ident: "query".to_owned() + &inputs.len().to_string(),
+                arg_type: ArgType::Query {
+                    inputs: query_inputs,
+                },
+                mutable,
+            });
+        } else {
+            let ident = body[..ident_end].trim_end().to_owned();
 
-        //     let Type::Path(component) = input else {
-        //         panic!("unsupported system input type")
-        //     };
+            inputs.push(SystemInputInfo {
+                ident,
+                arg_type: ArgType::DataAccessDirect,
+                mutable,
+            });
+        }
 
-        //     let ident = component.path.segments.last().unwrap().ident.to_string();
-
-        //     (ident, ArgType::DataAccessCell)
-        // } else {
-        //     (param_type, ArgType::DataAccessDirect)
-        // };
-
-        inputs.push(SystemInputInfo {
-            ident: ident.to_owned(),
-            arg_type: ArgType::DataAccessDirect,
-            mutable,
-        });
+        if let Some(i) = body.find(',') {
+            body = body[i + 1..].trim_start();
+        } else {
+            break;
+        }
     }
 
     info.systems.push(SystemInfo {

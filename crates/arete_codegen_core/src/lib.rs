@@ -1,14 +1,5 @@
 use convert_case::{Case, Casing};
 
-const ARETE_PUBLIC_COMPONENTS: &[&str] = &[
-    "Camera",
-    "Color",
-    "DirectionalLight",
-    "DynamicStaticMesh",
-    "PointLight",
-    "Transform",
-];
-
 #[derive(Debug, Default)]
 pub struct FfiGenerator {
     pub systems: Vec<SystemInfo>,
@@ -48,6 +39,15 @@ pub struct StructInfo {
     pub string_id: String,
     pub struct_type: StructType,
 }
+
+const ARETE_PUBLIC_COMPONENTS: &[&str] = &[
+    "Camera",
+    "Color",
+    "DirectionalLight",
+    "DynamicStaticMesh",
+    "PointLight",
+    "Transform",
+];
 
 impl FfiGenerator {
     pub fn gen_ffi(self, header: String) -> String {
@@ -226,7 +226,7 @@ impl FfiGenerator {
             .iter()
             .flat_map(|s| &s.inputs)
             .filter_map(|i| {
-                if i.ident != "Query" {
+                if !matches!(i.arg_type, ArgType::Query { .. }) {
                     let string_id = self
                         .structs
                         .iter()
@@ -354,35 +354,24 @@ impl FfiGenerator {
                 if !input.mutable {
                     output += "const ";
                 }
-                output += &input.ident;
-                output += "* ";
-                output += &input.ident.to_case(Case::Snake);
-                if matches!(input.arg_type, ArgType::DataAccessCell) {
-                    output += "ComponentCell<";
-                }
-                if matches!(input.arg_type, ArgType::DataAccessCell) {
-                    output += ">";
-                }
-
                 if let ArgType::Query { inputs } = &input.arg_type {
-                    output += "<";
-                    if inputs.len() > 1 {
-                        output += "(";
-                    }
-                    for input in inputs {
-                        output += "&'a ";
-                        if input.mutable {
-                            output += "mut ";
+                    output += "Query<";
+                    for (i, input) in inputs.iter().enumerate() {
+                        if !input.mutable {
+                            output += "const ";
                         }
                         output += &input.ident;
-                        output += ", ";
-                    }
-                    if inputs.len() > 1 {
-                        output += ")";
+                        if i + 1 < inputs.len() {
+                            output += ", ";
+                        }
                     }
                     output += ">";
+                } else {
+                    output += &input.ident;
                 }
 
+                output += "* ";
+                output += &input.ident.to_case(Case::Snake);
                 output += ";\n";
             }
 
@@ -585,6 +574,14 @@ impl FfiGenerator {
     }
 
     fn gen_system_arg_query_component(&self) -> String {
+        let string_id = |ident: &str| {
+            self.structs
+                .iter()
+                .find(|s| s.ident == ident)
+                .map(|s| s.string_id.clone())
+                .unwrap_or_else(|| String::from("arete_public::") + ident)
+        };
+
         let mut output = String::new();
 
         output += "extern \"C\" const char* system_arg_query_component(\n";
@@ -608,8 +605,8 @@ impl FfiGenerator {
 
                     for (i, input) in inputs.iter().enumerate() {
                         output += &format!(
-                            "                case {i}: {}::string_id().as_ptr(),\n",
-                            input.ident
+                            "                case {i}: return \"{}\";\n",
+                            string_id(&input.ident)
                         );
                     }
 
@@ -620,8 +617,6 @@ impl FfiGenerator {
 
             output += "            default: std::abort();\n";
             output += "        }\n";
-
-            todo!();
         }
 
         output += "        default: std::abort();\n";
@@ -651,17 +646,17 @@ impl FfiGenerator {
 
             for (i, input) in system.inputs.iter().enumerate() {
                 if let ArgType::Query { inputs } = &input.arg_type {
-                    output += &format!("            {i} => switch (query_index) {{\n");
+                    output += &format!("            case {i}: switch (query_index) {{\n");
 
                     for (i, input) in inputs.iter().enumerate() {
-                        output += &format!("                case {i}: QueryType::Component");
+                        output += &format!("                case {i}: return QueryTypeComponent");
                         output += match input.mutable {
-                            true => "Mut,\n",
-                            false => "Ref,\n",
+                            true => "Mut;\n",
+                            false => "Ref;\n",
                         };
                     }
 
-                    output += "                default: std::abort(),\n";
+                    output += "                default: std::abort();\n";
                     output += "            }\n";
                 }
             }
