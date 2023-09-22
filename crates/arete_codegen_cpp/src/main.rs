@@ -129,8 +129,8 @@ fn parse_system(info: &mut FfiGenerator, ident: &str, mut body: &str, is_once: b
                 }
 
                 let ident_end = body
-                    .find(',')
-                    .or_else(|| body.find('>'))
+                    .chars()
+                    .position(|c| c == ',' || c == '>')
                     .expect("malformed query");
 
                 let ident = body[..ident_end].trim_end().to_owned();
