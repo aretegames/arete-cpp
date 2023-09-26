@@ -1,5 +1,3 @@
-use convert_case::{Case, Casing};
-
 #[derive(Debug, Default)]
 pub struct FfiGenerator {
     pub systems: Vec<SystemInfo>,
@@ -343,17 +341,20 @@ impl FfiGenerator {
         let mut output = String::new();
 
         let gen_system_fn = &mut |system: &SystemInfo| {
-            let struct_ident = system.ident.to_case(Case::Pascal) + "Data";
+            output += "int32_t ";
+            output += &system.ident;
+            output += "_ffi(void** input) {\n";
+            output += "    ";
+            output += &system.ident;
+            output += "(\n";
 
-            output += "struct ";
-            output += &struct_ident;
-            output += " {\n";
+            for (i, input) in system.inputs.iter().enumerate() {
+                output += "        *static_cast<";
 
-            for input in &system.inputs {
-                output += "    ";
                 if !input.mutable {
                     output += "const ";
                 }
+
                 if let ArgType::Query { inputs } = &input.arg_type {
                     output += "Query<";
                     for (i, input) in inputs.iter().enumerate() {
@@ -362,40 +363,22 @@ impl FfiGenerator {
                         }
                         output += &input.ident;
                         if i + 1 < inputs.len() {
-                            output += ", ";
+                            output += "&, ";
                         }
                     }
-                    output += ">";
+                    output += "&>";
                 } else {
                     output += &input.ident;
                 }
 
-                output += "* ";
-                output += &input.ident.to_case(Case::Snake);
-                output += ";\n";
+                output += &format!("*>(input[{i}])");
+
+                if i + 1 < system.inputs.len() {
+                    output += ",\n";
+                } else {
+                    output += "\n";
+                }
             }
-
-            output += "};\n\n";
-
-            output += "int32_t ";
-            output += &system.ident;
-            output += "_ffi(void* input) {\n";
-            output += "    auto data = static_cast<";
-            output += &struct_ident;
-            output += "*>(input);\n";
-            output += "    ";
-            output += &system.ident;
-            output += "(\n";
-
-            for input in &system.inputs[..system.inputs.len() - 1] {
-                output += "        *data->";
-                output += &input.ident.to_case(Case::Snake);
-                output += ",\n";
-            }
-
-            output += "        *data->";
-            output += &system.inputs.last().unwrap().ident.to_case(Case::Snake);
-            output += "\n";
 
             output += "    );\n\n";
             output += "    return 0;\n";
@@ -439,7 +422,7 @@ impl FfiGenerator {
     fn gen_system_fn(&self) -> String {
         let mut output = String::new();
 
-        output += "typedef int32_t (*system_fn_ptr)(void*);\n\n";
+        output += "typedef int32_t (*system_fn_ptr)(void**);\n\n";
         output += "extern \"C\" system_fn_ptr system_fn(size_t system_index) {\n";
         output += "    switch (system_index) {\n";
 

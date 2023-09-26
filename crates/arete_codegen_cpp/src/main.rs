@@ -128,10 +128,7 @@ fn parse_system(info: &mut FfiGenerator, ident: &str, mut body: &str, is_once: b
                     mutable = true;
                 }
 
-                let ident_end = body
-                    .chars()
-                    .position(|c| c == ',' || c == '>')
-                    .expect("malformed query");
+                let ident_end = body.find('&').expect("malformed query");
 
                 let ident = body[..ident_end].trim_end().to_owned();
 
@@ -141,7 +138,7 @@ fn parse_system(info: &mut FfiGenerator, ident: &str, mut body: &str, is_once: b
                     mutable,
                 });
 
-                body = body[ident_end + 1..].trim_start();
+                body = body[ident_end + 1..].trim_start()[1..].trim_start();
             }
 
             inputs.push(SystemInputInfo {

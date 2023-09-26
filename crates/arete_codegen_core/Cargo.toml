@@ -2,6 +2,3 @@
 name = "arete_codegen_core"
 version = "0.0.0"
 edition = "2021"
-
-[dependencies]
-convert_case = "0.6.0"
