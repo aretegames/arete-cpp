@@ -289,23 +289,21 @@ impl FfiGenerator {
         if resources.is_empty() {
             output += "    return 1;\n";
         } else {
-            output += &format!(
-                "    if (std::strcmp(string_id, \"{}\") == 0) {{\n",
-                resources[0].string_id
-            );
-            output += &format!(
-                "        *static_cast<{}*>(val) = {}{{}};\n",
-                resources[0].ident, resources[0].ident,
-            );
-
-            for resource in &resources[1..] {
+            for (i, resource) in resources.iter().enumerate() {
+                if i == 0 {
+                    output += &format!(
+                        "    if (std::strcmp(string_id, \"{}\") == 0) {{\n",
+                        resource.string_id
+                    );
+                } else {
+                    output += &format!(
+                        "    }} else if (std::strcmp(string_id, \"{}\") == 0) {{\n",
+                        resource.string_id
+                    );
+                }
                 output += &format!(
-                    "    }} else if (std::strcmp(string_id, \"{}\") == 0) {{\n",
-                    resource.string_id
-                );
-                output += &format!(
-                    "        *static_cast<{}*>(val) = {}{{}};\n",
-                    resource.ident, resource.ident,
+                    "        std::construct_at(static_cast<{}*>(val));\n",
+                    resource.ident
                 );
             }
 
