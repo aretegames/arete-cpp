@@ -77,10 +77,28 @@ impl FfiGenerator {
         output += "    QueryTypeComponentRef,\n";
         output += "};\n\n";
 
+        output += &self.gen_component_string_id();
         output += &self.gen_component_size();
         output += &self.gen_component_align();
         output += &self.gen_component_type();
         output += &self.gen_set_component_ids();
+
+        output
+    }
+
+    fn gen_component_string_id(&self) -> String {
+        let mut output = String::new();
+
+        output += "extern \"C\" const char* component_string_id(size_t index) {\n";
+        output += "    switch(index) {\n";
+
+        for (i, struct_info) in self.structs.iter().enumerate() {
+            output += &format!("        case {i}: return \"{}\";\n", struct_info.string_id);
+        }
+
+        output += "        default: return nullptr;\n";
+        output += "    }\n";
+        output += "}\n\n";
 
         output
     }
@@ -155,42 +173,25 @@ impl FfiGenerator {
         if self.structs.is_empty() {
             output += "    std::abort();\n";
         } else {
-            output += &format!(
-                "    if (std::strcmp(string_id, \"{}\") == 0) {{\n",
-                self.structs[0].string_id
-            );
-
-            output += &format!(
-                "        static_assert(std::is_standard_layout_v<{}>);\n",
-                self.structs[0].ident
-            );
-
-            match &self.structs[0].struct_type {
-                StructType::Component => {
+            for (i, struct_info) in self.structs.iter().enumerate() {
+                if i == 0 {
                     output += &format!(
-                        "        static_assert(std::is_trivially_copyable_v<{}>);\n",
-                        self.structs[0].ident
+                        "    if (std::strcmp(string_id, \"{}\") == 0) {{\n",
+                        self.structs[0].string_id
                     );
-                    output += "        return ComponentTypeComponent;\n";
+                } else {
+                    output += &format!(
+                        "    }} else if (std::strcmp(string_id, \"{}\") == 0) {{\n",
+                        struct_info.string_id
+                    );
                 }
-                StructType::Resource => {
-                    output += "        return ComponentTypeResource;\n";
-                }
-            };
-
-            for struct_info in &self.structs[1..] {
-                output += &format!(
-                    "    }} else if (std::strcmp(string_id, \"{}\") == 0) {{\n",
-                    struct_info.string_id
-                );
-
-                output += &format!(
-                    "        static_assert(std::is_standard_layout_v<{}>);\n",
-                    struct_info.ident
-                );
 
                 match &struct_info.struct_type {
                     StructType::Component => {
+                        output += &format!(
+                            "        static_assert(std::is_standard_layout_v<{}>);\n",
+                            struct_info.ident
+                        );
                         output += &format!(
                             "        static_assert(std::is_trivially_copyable_v<{}>);\n",
                             struct_info.ident
@@ -239,6 +240,10 @@ impl FfiGenerator {
                     None
                 }
             })
+            .chain(self.structs.iter().map(|s| ComponentInfo {
+                ident: &s.ident,
+                string_id: s.string_id.clone(),
+            }))
             .chain(ARETE_PUBLIC_COMPONENTS.iter().map(|ident| ComponentInfo {
                 ident,
                 string_id: String::from("arete_public::") + ident,
