@@ -72,11 +72,6 @@ impl FfiGenerator {
         output += "    ArgTypeQuery,\n";
         output += "};\n\n";
 
-        output += "enum QueryType {\n";
-        output += "    QueryTypeComponentMut,\n";
-        output += "    QueryTypeComponentRef,\n";
-        output += "};\n\n";
-
         output += &self.gen_component_string_id();
         output += &self.gen_component_size();
         output += &self.gen_component_align();
@@ -333,9 +328,10 @@ impl FfiGenerator {
         output += &self.gen_system_args_len();
         output += &self.gen_system_arg_type();
         output += &self.gen_system_arg_component();
-        output += &self.gen_system_arg_query_len();
-        output += &self.gen_system_arg_query_component();
-        output += &self.gen_system_arg_query_type();
+
+        output += &self.gen_system_query_args_len();
+        output += &self.gen_system_query_arg_type();
+        output += &self.gen_system_query_arg_component();
 
         output
     }
@@ -527,11 +523,11 @@ impl FfiGenerator {
         output
     }
 
-    fn gen_system_arg_query_len(&self) -> String {
+    fn gen_system_query_args_len(&self) -> String {
         let mut output = String::new();
 
         output +=
-            "extern \"C\" size_t system_arg_query_len(size_t system_index, size_t arg_index) {\n";
+            "extern \"C\" size_t system_query_args_len(size_t system_index, size_t arg_index) {\n";
         output += "    switch (system_index) {\n";
 
         for (i, system) in self.systems.iter().enumerate().filter(|(_, system)| {
@@ -559,7 +555,53 @@ impl FfiGenerator {
         output
     }
 
-    fn gen_system_arg_query_component(&self) -> String {
+    fn gen_system_query_arg_type(&self) -> String {
+        let mut output = String::new();
+
+        output += "extern \"C\" ArgType system_query_arg_type(\n";
+        output += "    size_t system_index,\n";
+        output += "    size_t arg_index,\n";
+        output += "    size_t query_index\n";
+        output += ") {\n";
+        output += "    switch (system_index) {\n";
+
+        for (i, system) in self.systems.iter().enumerate().filter(|(_, system)| {
+            system
+                .inputs
+                .iter()
+                .any(|input| matches!(input.arg_type, ArgType::Query { .. }))
+        }) {
+            output += &format!("        case {i}: switch (arg_index) {{\n");
+
+            for (i, input) in system.inputs.iter().enumerate() {
+                if let ArgType::Query { inputs } = &input.arg_type {
+                    output += &format!("            case {i}: switch (query_index) {{\n");
+
+                    for (i, input) in inputs.iter().enumerate() {
+                        output += &format!("                case {i}: return ArgTypeDataAccess");
+                        output += match input.mutable {
+                            true => "Mut;\n",
+                            false => "Ref;\n",
+                        };
+                    }
+
+                    output += "                default: std::abort();\n";
+                    output += "            }\n";
+                }
+            }
+
+            output += "            default: std::abort();\n";
+            output += "        }\n";
+        }
+
+        output += "        default: std::abort();\n";
+        output += "    }\n";
+        output += "}\n\n";
+
+        output
+    }
+
+    fn gen_system_query_arg_component(&self) -> String {
         let string_id = |ident: &str| {
             self.structs
                 .iter()
@@ -570,7 +612,7 @@ impl FfiGenerator {
 
         let mut output = String::new();
 
-        output += "extern \"C\" const char* system_arg_query_component(\n";
+        output += "extern \"C\" const char* system_query_arg_component(\n";
         output += "    size_t system_index,\n";
         output += "    size_t arg_index,\n";
         output += "    size_t query_index\n";
@@ -594,52 +636,6 @@ impl FfiGenerator {
                             "                case {i}: return \"{}\";\n",
                             string_id(&input.ident)
                         );
-                    }
-
-                    output += "                default: std::abort();\n";
-                    output += "            }\n";
-                }
-            }
-
-            output += "            default: std::abort();\n";
-            output += "        }\n";
-        }
-
-        output += "        default: std::abort();\n";
-        output += "    }\n";
-        output += "}\n\n";
-
-        output
-    }
-
-    fn gen_system_arg_query_type(&self) -> String {
-        let mut output = String::new();
-
-        output += "extern \"C\" QueryType system_arg_query_type(\n";
-        output += "    size_t system_index,\n";
-        output += "    size_t arg_index,\n";
-        output += "    size_t query_index\n";
-        output += ") {\n";
-        output += "    switch (system_index) {\n";
-
-        for (i, system) in self.systems.iter().enumerate().filter(|(_, system)| {
-            system
-                .inputs
-                .iter()
-                .any(|input| matches!(input.arg_type, ArgType::Query { .. }))
-        }) {
-            output += &format!("        case {i}: switch (arg_index) {{\n");
-
-            for (i, input) in system.inputs.iter().enumerate() {
-                if let ArgType::Query { inputs } = &input.arg_type {
-                    output += &format!("            case {i}: switch (query_index) {{\n");
-
-                    for (i, input) in inputs.iter().enumerate() {
-                        output += &format!("                case {i}: return QueryTypeComponent");
-                        output += match input.mutable {
-                            true => "Mut;\n",
-                            false => "Ref;\n",
-                        };
                     }
 
                     output += "                default: std::abort();\n";
