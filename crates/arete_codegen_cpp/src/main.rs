@@ -119,7 +119,7 @@ fn parse_system(info: &mut FfiGenerator, ident: &str, mut body: &str, is_once: b
 
             let mut query_inputs = Vec::new();
 
-            while !body.starts_with('&') {
+            loop {
                 let mutable;
                 if body.starts_with("const") {
                     mutable = false;
@@ -138,8 +138,16 @@ fn parse_system(info: &mut FfiGenerator, ident: &str, mut body: &str, is_once: b
                     mutable,
                 });
 
-                body = body[ident_end + 1..].trim_start()[1..].trim_start();
+                body = body[ident_end + 1..].trim_start();
+
+                if body.starts_with('>') {
+                    break;
+                } else {
+                    body = body[1..].trim_start();
+                }
             }
+
+            body = body[1..].trim_start();
 
             inputs.push(SystemInputInfo {
                 ident: "query".to_owned() + &inputs.len().to_string(),

@@ -54,6 +54,7 @@ impl FfiGenerator {
         output += &self.gen_components();
         output += &self.gen_resource_init();
         output += &self.gen_systems();
+        output += &self.gen_callbacks();
 
         output
     }
@@ -348,29 +349,15 @@ impl FfiGenerator {
             output += "(\n";
 
             for (i, input) in system.inputs.iter().enumerate() {
-                output += "        *static_cast<";
-
-                if !input.mutable {
-                    output += "const ";
-                }
-
-                if let ArgType::Query { inputs } = &input.arg_type {
-                    output += "Query<";
-                    for (i, input) in inputs.iter().enumerate() {
-                        if !input.mutable {
-                            output += "const ";
-                        }
-                        output += &input.ident;
-                        if i + 1 < inputs.len() {
-                            output += "&, ";
-                        }
-                    }
-                    output += "&>";
+                if let ArgType::Query { .. } = &input.arg_type {
+                    output += &format!("        {{ input[{i}] }}")
                 } else {
-                    output += &input.ident;
+                    output += "        *static_cast<";
+                    if !input.mutable {
+                        output += "const ";
+                    }
+                    output += &format!("{}*>(input[{i}])", input.ident);
                 }
-
-                output += &format!("*>(input[{i}])");
 
                 if i + 1 < system.inputs.len() {
                     output += ",\n";
@@ -648,6 +635,57 @@ impl FfiGenerator {
         }
 
         output += "        default: std::abort();\n";
+        output += "    }\n";
+        output += "}\n\n";
+
+        output
+    }
+
+    fn gen_callbacks(&self) -> String {
+        let mut output = String::new();
+
+        output += "enum CallbackType {\n";
+        output += "    CallbackTypeQueryGetFn,\n";
+        output += "    CallbackTypeQueryGetMutFn,\n";
+        output += "    CallbackTypeQueryGetFirstFn,\n";
+        output += "    CallbackTypeQueryGetFirstMutFn,\n";
+        output += "    CallbackTypeQueryForEachFn,\n";
+        output += "    CallbackTypeQueryParForEachFn,\n";
+        output += "};\n\n";
+
+        output += "const void* (*QueryGetFn)(const void*, EntityId, ComponentId);\n";
+        output += "void* (*QueryGetMutFn)(const void*, EntityId, ComponentId);\n";
+        output += "const void* (*QueryGetFirstFn)(const void*, ComponentId);\n";
+        output += "void* (*QueryGetFirstMutFn)(const void*, ComponentId);\n";
+        output += "void (*QueryForEachFn)(const void*, QueryForEachCallback, void*);\n";
+        output +=
+            "void (*QueryParForEachFn)(const void*, QueryParForEachCallback, const void*);\n\n";
+
+        output += "extern \"C\" void set_callback_fn(\n";
+        output += "    CallbackType callback_type,\n";
+        output += "    const void* callback\n";
+        output += ") {\n";
+        output += "    switch (callback_type) {\n";
+        output += "    case CallbackTypeQueryGetFn:\n";
+        output += "        QueryGetFn = (const void*(*)(const void*, EntityId, ComponentId))(callback);\n";
+        output += "        break;\n";
+        output += "    case CallbackTypeQueryGetMutFn:\n";
+        output +=
+            "        QueryGetMutFn = (void*(*)(const void*, EntityId, ComponentId))(callback);\n";
+        output += "        break;\n";
+        output += "    case CallbackTypeQueryGetFirstFn:\n";
+        output +=
+            "        QueryGetFirstFn = (const void*(*)(const void*, ComponentId))(callback);\n";
+        output += "        break;\n";
+        output += "    case CallbackTypeQueryGetFirstMutFn:\n";
+        output += "        QueryGetFirstMutFn = (void*(*)(const void*, ComponentId))(callback);\n";
+        output += "        break;\n";
+        output += "    case CallbackTypeQueryForEachFn:\n";
+        output += "        QueryForEachFn = (void(*)(const void*, QueryForEachCallback, void*))(callback);\n";
+        output += "        break;\n";
+        output += "    case CallbackTypeQueryParForEachFn:\n";
+        output += "        QueryParForEachFn = (void(*)(const void*, QueryParForEachCallback, const void*))(callback);\n";
+        output += "        break;\n";
         output += "    }\n";
         output += "}\n\n";
 
