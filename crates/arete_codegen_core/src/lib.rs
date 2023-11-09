@@ -51,6 +51,7 @@ impl FfiGenerator {
     pub fn gen_ffi(self, header: String) -> String {
         let mut output = header;
 
+        output += &gen_version();
         output += &self.gen_components();
         output += &self.gen_resource_init();
         output += &self.gen_systems();
@@ -690,4 +691,14 @@ impl FfiGenerator {
 
         output
     }
+}
+
+fn gen_version() -> String {
+    let mut output = String::new();
+
+    output += "extern \"C\" uint32_t arete_target_version() {\n";
+    output += "    return ENGINE_VERSION;\n";
+    output += "}\n\n";
+
+    output
 }
